@@ -16,6 +16,10 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
+#ifdef _WIN32
+# include <wincrypt.h>
+#endif
+
 #include <boost/asio/detail/config.hpp>
 
 #include <cstring>
@@ -615,7 +619,30 @@ BOOST_ASIO_SYNC_OP_VOID context::set_default_verify_paths(
     boost::system::error_code& ec)
 {
   ::ERR_clear_error();
+  
+#ifdef _WIN32
+  HCERTSTORE cert_store = CertOpenSystemStore(0, L"ROOT");
+  if (cert_store == NULL) {
+      return;
+  }
 
+  X509_STORE *store = X509_STORE_new();
+  PCCERT_CONTEXT cert_context = NULL;
+  while ((cert_context = CertEnumCertificatesInStore(cert_store, cert_context)) != NULL) {
+    X509 *x509 = d2i_X509(NULL,
+        (const unsigned char **)&cert_context->pbCertEncoded,
+        cert_context->cbCertEncoded);
+    if(x509 != NULL) {
+      X509_STORE_add_cert(store, x509);
+      X509_free(x509);
+    }
+  }
+
+  CertFreeCertificateContext(cert_context);
+  CertCloseStore(cert_store, 0);
+
+  SSL_CTX_set_cert_store(native_handle(), store);
+#else
   if (::SSL_CTX_set_default_verify_paths(handle_) != 1)
   {
     ec = boost::system::error_code(
@@ -623,7 +650,7 @@ BOOST_ASIO_SYNC_OP_VOID context::set_default_verify_paths(
         boost::asio::error::get_ssl_category());
     BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
   }
-
+#endif
   ec = boost::system::error_code();
   BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
 }
