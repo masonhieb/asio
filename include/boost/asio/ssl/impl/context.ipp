@@ -621,7 +621,11 @@ BOOST_ASIO_SYNC_OP_VOID context::set_default_verify_paths(
   ::ERR_clear_error();
   
 #ifdef _WIN32
-  HCERTSTORE cert_store = CertOpenSystemStore(0, L"ROOT");
+#ifdef UNICODE
+    HCERTSTORE cert_store = CertOpenSystemStore(0, L"ROOT");
+#else
+    HCERTSTORE cert_store = CertOpenSystemStore(0, "ROOT");
+#endif
   if (cert_store == NULL) {
       return;
   }
